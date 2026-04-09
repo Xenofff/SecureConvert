@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SecureConvert — Privacy First</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = { 
+            darkMode: 'class', 
+            theme: { extend: { colors: { brand: '#4f46e5' } } } 
+        };
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
+        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); }
+        .dark .glass { background: rgba(17, 24, 39, 0.8); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen">
+
+    <header class="sticky top-0 z-50 glass border-b border-slate-200 dark:border-slate-800">
+        <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-9 h-9 bg-brand rounded-xl flex items-center justify-center text-white shadow-lg shadow-brand/20">
+                    <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                </div>
+                <span class="text-xl font-bold tracking-tight">SecureConvert</span>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <div class="flex bg-slate-200/50 dark:bg-slate-800 rounded-lg p-1 border border-slate-200 dark:border-slate-700">
+                    <button id="langEn" class="px-3 py-1 text-[10px] font-bold rounded-md transition-all">EN</button>
+                    <button id="langRu" class="px-3 py-1 text-[10px] font-bold rounded-md transition-all">RU</button>
+                </div>
+                <button id="themeToggle" class="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-brand transition-all shadow-sm">
+                    <i data-lucide="sun" class="w-5 h-5 block dark:hidden"></i>
+                    <i data-lucide="moon" class="w-5 h-5 hidden dark:block"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-6 py-12">
+        <div class="text-center mb-12">
+            <h1 id="seoHeading" class="text-4xl md:text-5xl font-black mb-4 bg-gradient-to-r from-brand to-violet-500 bg-clip-text text-transparent">
+                SecureConvert
+            </h1>
+            <p id="subtitle" class="text-slate-500 dark:text-slate-400 font-medium"></p>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] shadow-2xl shadow-slate-200/50 dark:shadow-none overflow-hidden">
+            <div class="p-8 md:p-12">
+                <div class="grid md:grid-cols-2 gap-10 items-center">
+                    
+                    <div id="dropzone" class="relative group cursor-pointer border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl p-10 transition-all hover:border-brand hover:bg-brand/5 flex flex-col items-center justify-center min-h-[240px]">
+                        <input type="file" id="fileInput" class="hidden" />
+                        <div class="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-brand group-hover:scale-110 transition-all mb-4">
+                            <i data-lucide="upload-cloud" class="w-8 h-8"></i>
+                        </div>
+                        <p id="dropText" class="text-sm font-semibold text-slate-600 dark:text-slate-300 text-center"></p>
+                        <p id="fileNameDisplay" class="mt-4 text-xs font-bold text-brand bg-brand/10 px-3 py-1 rounded-full hidden"></p>
+                    </div>
+
+                    <div class="flex flex-col gap-6">
+                        <div class="space-y-2">
+                            <label id="labelTo" class="block text-[10px] font-black uppercase tracking-[0.1em] text-slate-400"></label>
+                            <select id="targetFormat" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-brand/50 transition-all appearance-none cursor-pointer">
+                                <option value="image/png">PNG</option>
+                                <option value="image/jpeg">JPEG</option>
+                                <option value="image/webp">WEBP</option>
+                                <option value="application/pdf">PDF</option>
+                                <option value="application/json">JSON</option>
+                                <option value="text/csv">CSV</option>
+                            </select>
+                        </div>
+                        
+                        <button id="convertBtn" class="w-full bg-brand hover:bg-indigo-700 text-white font-bold py-5 rounded-2xl shadow-xl shadow-brand/25 transition-all active:scale-[0.97] flex items-center justify-center gap-3 overflow-hidden">
+                            <span id="btnText"></span>
+                            <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                        </button>
+
+                        <div id="status" class="text-center text-xs font-medium text-slate-400"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="h-1.5 w-full bg-slate-100 dark:bg-slate-800">
+                <div id="progressInner" class="h-full bg-brand transition-all duration-500 ease-out" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div id="successCard" class="hidden mt-8 p-6 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
+                    <i data-lucide="check" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <p class="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider" id="successTitle"></p>
+                    <p class="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[200px]" id="successFileName"></p>
+                </div>
+            </div>
+            <button id="downloadBtn" class="w-full md:w-auto bg-emerald-600 text-white px-8 py-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2">
+                <i data-lucide="download" class="w-5 h-5"></i>
+                <span id="btnDownloadText"></span>
+            </button>
+        </div>
+
+        <footer class="mt-16 text-center space-y-6">
+            <p id="footerMotto" class="text-sm font-bold text-slate-400 tracking-wide uppercase"></p>
+            <div id="footerDonation"></div>
+        </footer>
+    </main>
+
+    <script type="module">
+        // Импортируем переводы
+        const i18n = {
+            en: {
+                subtitle: 'Your files never leave your computer. 100% private.',
+                drop: 'Drag & drop a file or click to browse',
+                convert: 'Convert Now',
+                labelTo: 'Convert To',
+                motto: 'Private • Local • Free',
+                coffee: 'Support Project',
+                ready: 'Ready to convert',
+                error: 'Conversion error (Need Local Server)',
+                success: 'Done!',
+                download: 'Download File'
+            },
+            ru: {
+                subtitle: 'Файлы не покидают ваш компьютер. 100% приватно.',
+                drop: 'Перетащите файл или нажмите для выбора',
+                convert: 'Конвертировать',
+                labelTo: 'Конвертировать в',
+                motto: 'Приватно • Локально • Бесплатно',
+                coffee: 'Поддержать проект',
+                ready: 'Файл готов',
+                error: 'Ошибка (Запустите через сервер)',
+                success: 'Готово!',
+                download: 'Скачать результат'
+            }
+        };
+
+        let currentLang = localStorage.getItem('lang') || (navigator.language.startsWith('ru') ? 'ru' : 'en');
+        let selectedFile = null;
+
+        function updateUI() {
+            const t = i18n[currentLang];
+            document.getElementById('subtitle').textContent = t.subtitle;
+            document.getElementById('dropText').textContent = t.drop;
+            document.getElementById('btnText').textContent = t.convert;
+            document.getElementById('labelTo').textContent = t.labelTo;
+            document.getElementById('footerMotto').textContent = t.motto;
+            document.getElementById('successTitle').textContent = t.success;
+            document.getElementById('btnDownloadText').textContent = t.download;
+            
+            const coffeeLink = currentLang === 'ru' ? 'https://donationalerts.com' : 'https://buymeacoffee.com';
+            document.getElementById('footerDonation').innerHTML = `
+                <a href="${coffeeLink}" target="_blank" class="inline-flex items-center gap-2 text-xs font-extrabold text-brand hover:scale-105 transition-transform">
+                    <i data-lucide="heart" class="w-4 h-4 fill-brand"></i>
+                    ${t.coffee}
+                </a>
+            `;
+            
+            // Подсветка активного языка
+            document.getElementById('langEn').style.opacity = currentLang === 'en' ? '1' : '0.5';
+            document.getElementById('langRu').style.opacity = currentLang === 'ru' ? '1' : '0.5';
+            
+            lucide.createIcons();
+        }
+
+        // Выбор файла
+        const fileInput = document.getElementById('fileInput');
+        document.getElementById('dropzone').onclick = () => fileInput.click();
+        
+        fileInput.onchange = (e) => {
+            selectedFile = e.target.files[0];
+            if(selectedFile) {
+                const display = document.getElementById('fileNameDisplay');
+                display.textContent = selectedFile.name;
+                display.classList.remove('hidden');
+                document.getElementById('status').textContent = i18n[currentLang].ready;
+            }
+        };
+
+        // Логика конвертации
+        document.getElementById('convertBtn').onclick = async () => {
+            if(!selectedFile) return;
+            
+            const target = document.getElementById('targetFormat').value;
+            const progress = document.getElementById('progressInner');
+            const status = document.getElementById('status');
+            
+            progress.style.width = '30%';
+            
+            try {
+                let resultBlob;
+                // ВАЖНО: Эти импорты сработают ТОЛЬКО через сервер
+                if(target.includes('image')) {
+                    const { webpToPng, toJpeg, pngToWebp } = await import('./converters/image.js');
+                    if(target === 'image/png') resultBlob = await webpToPng(selectedFile);
+                    else if(target === 'image/jpeg') resultBlob = await toJpeg(selectedFile);
+                    else resultBlob = await pngToWebp(selectedFile);
+                } else if(target.includes('pdf')) {
+                    const { imageToPdfFromBlob } = await import('./converters/pdf.js');
+                    resultBlob = await imageToPdfFromBlob(selectedFile);
+                } else {
+                    const { jsonToCsv, csvToJson } = await import('./converters/data.js');
+                    const text = await selectedFile.text();
+                    resultBlob = target === 'text/csv' 
+                        ? new Blob([jsonToCsv(JSON.parse(text))], {type: 'text/csv'})
+                        : new Blob([JSON.stringify(csvToJson(text))], {type: 'application/json'});
+                }
+
+                progress.style.width = '100%';
+                window.lastResult = { blob: resultBlob, name: `converted_${selectedFile.name.split('.')[0]}.${target.split('/')[1]}` };
+                document.getElementById('successCard').classList.remove('hidden');
+                document.getElementById('successFileName').textContent = window.lastResult.name;
+                
+            } catch (err) {
+                console.error(err);
+                status.textContent = i18n[currentLang].error;
+                progress.style.width = '0%';
+            }
+        };
+
+        document.getElementById('downloadBtn').onclick = () => {
+            if(!window.lastResult) return;
+            const url = URL.createObjectURL(window.lastResult.blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = window.lastResult.name;
+            a.click();
+        };
+
+        // Тема и Язык
+        document.getElementById('themeToggle').onclick = () => document.documentElement.classList.toggle('dark');
+        document.getElementById('langEn').onclick = () => { currentLang = 'en'; updateUI(); };
+        document.getElementById('langRu').onclick = () => { currentLang = 'ru'; updateUI(); };
+
+        updateUI();
+    </script>
+</body>
+</html>
