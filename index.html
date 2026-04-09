@@ -6,6 +6,10 @@
     <title>SecureConvert — Privacy First</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Добавлены необходимые библиотеки для конвертации -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -165,6 +169,7 @@
 </div>
 
 <script type="module">
+    // --- i18n ---
     const i18n = {
         en: {
             subtitle: 'Supports Images (PNG, JPG, WEBP), PDF, JSON & CSV. 100% private.',
@@ -238,6 +243,7 @@
         lucide.createIcons();
     }
 
+    // --- Theme ---
     const themeToggle = document.getElementById('themeToggle');
     if (localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark');
     themeToggle.onclick = () => {
@@ -246,6 +252,7 @@
         setTimeout(() => lucide.createIcons(), 10);
     };
 
+    // --- Modal ---
     const aboutModal = document.getElementById('aboutModal');
     document.getElementById('aboutBtn').onclick = () => aboutModal.classList.remove('hidden');
     document.getElementById('closeModal').onclick = () => aboutModal.classList.add('hidden');
@@ -255,6 +262,203 @@
     document.getElementById('langRu').onclick = () => { currentLang = 'ru'; localStorage.setItem('lang', 'ru'); updateUI(); };
 
     updateUI();
+
+    // --- File Handling & Conversion Logic (UI untouched) ---
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const convertBtn = document.getElementById('convertBtn');
+    const targetFormat = document.getElementById('targetFormat');
+    const progressInner = document.getElementById('progressInner');
+
+    let selectedFile = null;
+
+    // Открытие проводника при клике на dropzone
+    dropzone.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    // Обработка выбора файла через input
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setFile(file);
+        }
+        // Сбрасываем value, чтобы при повторном выборе того же файла событие срабатывало
+        fileInput.value = '';
+    });
+
+    // Drag & drop
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('border-brand', 'bg-brand/5');
+    });
+
+    dropzone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('border-brand', 'bg-brand/5');
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('border-brand', 'bg-brand/5');
+        const file = e.dataTransfer.files[0];
+        if (file) {
+            setFile(file);
+        }
+    });
+
+    function setFile(file) {
+        selectedFile = file;
+        fileNameDisplay.textContent = file.name;
+        fileNameDisplay.classList.remove('hidden');
+    }
+
+    // --- Конвертация ---
+    convertBtn.addEventListener('click', async () => {
+        if (!selectedFile) {
+            alert(currentLang === 'ru' ? 'Пожалуйста, выберите файл' : 'Please select a file');
+            return;
+        }
+
+        const targetMime = targetFormat.value;
+        progressInner.style.width = '10%';
+
+        try {
+            let resultBlob;
+            const fileType = selectedFile.type;
+            const fileName = selectedFile.name;
+
+            // Вспомогательные функции для конвертации (используем те же подходы, что в предоставленных модулях)
+            if (fileType.startsWith('image/') || fileName.match(/\.(png|jpe?g|webp|bmp|gif)$/i)) {
+                // Изображения: конвертация через canvas
+                resultBlob = await convertImage(selectedFile, targetMime);
+            } else if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
+                // PDF -> изображение или остаётся PDF (если цель PDF — просто вернуть оригинал)
+                if (targetMime === 'application/pdf') {
+                    resultBlob = selectedFile;
+                } else if (targetMime.startsWith('image/')) {
+                    resultBlob = await pdfToImage(selectedFile, targetMime);
+                } else {
+                    throw new Error('Unsupported conversion from PDF to ' + targetMime);
+                }
+            } else if (fileType === 'application/json' || fileName.endsWith('.json')) {
+                if (targetMime === 'text/csv') {
+                    resultBlob = await jsonToCsvBlob(selectedFile);
+                } else {
+                    throw new Error('Unsupported conversion from JSON');
+                }
+            } else if (fileType === 'text/csv' || fileName.endsWith('.csv')) {
+                if (targetMime === 'application/json') {
+                    resultBlob = await csvToJsonBlob(selectedFile);
+                } else {
+                    throw new Error('Unsupported conversion from CSV');
+                }
+            } else {
+                // Пробуем как изображение
+                if (targetMime.startsWith('image/')) {
+                    resultBlob = await convertImage(selectedFile, targetMime);
+                } else {
+                    throw new Error('Unsupported file type');
+                }
+            }
+
+            progressInner.style.width = '100%';
+
+            // Генерация имени файла
+            const baseName = fileName.replace(/\.[^/.]+$/, '');
+            let extension = '';
+            if (targetMime === 'image/png') extension = '.png';
+            else if (targetMime === 'image/jpeg') extension = '.jpg';
+            else if (targetMime === 'image/webp') extension = '.webp';
+            else if (targetMime === 'application/pdf') extension = '.pdf';
+            else if (targetMime === 'application/json') extension = '.json';
+            else if (targetMime === 'text/csv') extension = '.csv';
+            else extension = '';
+
+            const newFileName = baseName + extension;
+
+            // Скачивание
+            const url = URL.createObjectURL(resultBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = newFileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            progressInner.style.width = '0%';
+        } catch (error) {
+            console.error(error);
+            alert('Conversion error: ' + (error.message || 'Unknown error'));
+            progressInner.style.width = '0%';
+        }
+    });
+
+    // --- Вспомогательные функции конвертации (на основе предоставленных файлов) ---
+    async function convertImage(blob, targetMime) {
+        const img = await loadImageFromBlob(blob);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        let quality = 0.92;
+        if (targetMime === 'image/png') quality = 1;
+        return new Promise(resolve => canvas.toBlob(resolve, targetMime, quality));
+    }
+
+    function loadImageFromBlob(blob) {
+        return new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+            img.onerror = reject;
+            img.src = url;
+        });
+    }
+
+    async function pdfToImage(pdfBlob, targetMime) {
+        const arrayBuffer = await pdfBlob.arrayBuffer();
+        const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 2.0 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: context, viewport }).promise;
+        let quality = 0.92;
+        if (targetMime === 'image/png') quality = 1;
+        return new Promise(resolve => canvas.toBlob(resolve, targetMime, quality));
+    }
+
+    async function jsonToCsvBlob(jsonBlob) {
+        const text = await jsonBlob.text();
+        const json = JSON.parse(text);
+        if (!Array.isArray(json) || json.length === 0) throw new Error('JSON must be a non-empty array');
+        const headers = Object.keys(json[0]);
+        const lines = [headers.join(',')];
+        json.forEach(row => {
+            const line = headers.map(h => {
+                const v = row[h] != null ? row[h] : '';
+                const s = String(v).replace(/"/g, '""');
+                if (s.includes(',') || s.includes('\n')) return '"' + s + '"';
+                return s;
+            }).join(',');
+            lines.push(line);
+        });
+        return new Blob([lines.join('\n')], { type: 'text/csv' });
+    }
+
+    async function csvToJsonBlob(csvBlob) {
+        const text = await csvBlob.text();
+        const results = window.Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: true });
+        const jsonStr = JSON.stringify(results.data, null, 2);
+        return new Blob([jsonStr], { type: 'application/json' });
+    }
 </script>
 </body>
 </html>
