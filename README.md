@@ -1,9 +1,9 @@
-# SecureConvert
+# JS-Convert
 
 100% Client-side privacy-first converter.
 
 ## Overview
-- SecureConvert is a fully client-side, serverless file converter. All processing happens in your browser, with no data uploaded to any server.
+- JS-Convert is a fully client-side, serverless file converter. All processing happens in your browser, with no data uploaded to any server.
 - It supports image conversions (JPG, PNG, WEBP), PDF creation from images, and data transformations (JSON/CSV).
 - The app uses modern web technologies to run locally and privately while providing a smooth user experience.
 
