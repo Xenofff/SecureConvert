@@ -38,3 +38,5 @@
 
 ## License
 MIT
+
+[![HitCount](https://hits.dwyl.com/Xenofff/https://githubcom/Xenofff/SecureConvert.svg?style=flat-square)](http://hits.dwyl.com/Xenofff/https://githubcom/Xenofff/SecureConvert)

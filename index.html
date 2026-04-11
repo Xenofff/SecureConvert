@@ -10,6 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -75,12 +76,15 @@
         <div class="p-8 md:p-12">
             <div class="grid md:grid-cols-2 gap-10 items-center">
                 <div id="dropzone" class="relative group cursor-pointer border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl p-10 transition-all hover:border-brand hover:bg-brand/5 flex flex-col items-center justify-center min-h-[240px]">
-                    <input type="file" id="fileInput" class="hidden" />
+                    <input type="file" id="fileInput" class="hidden" multiple />
                     <div class="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-brand group-hover:scale-110 transition-all mb-4">
                         <i data-lucide="upload-cloud" class="w-8 h-8"></i>
                     </div>
                     <p id="dropText" class="text-sm font-semibold text-slate-600 dark:text-slate-300 text-center"></p>
-                    <p id="fileNameDisplay" class="mt-4 text-xs font-bold text-brand bg-brand/10 px-3 py-1 rounded-full hidden"></p>
+                    <div id="filesList" class="mt-4 w-full max-h-32 overflow-y-auto space-y-1 hidden">
+                        <!-- Список файлов будет здесь -->
+                    </div>
+                    <p id="fileCountDisplay" class="mt-2 text-xs font-bold text-brand bg-brand/10 px-3 py-1 rounded-full hidden"></p>
                 </div>
 
                 <div class="flex flex-col gap-6">
@@ -99,6 +103,7 @@
                         <span id="btnText"></span>
                         <i data-lucide="arrow-right" class="w-5 h-5"></i>
                     </button>
+                    <div id="conversionStatus" class="text-xs text-slate-500 dark:text-slate-400 text-center hidden"></div>
                 </div>
             </div>
         </div>
@@ -173,7 +178,7 @@
     const i18n = {
         en: {
             subtitle: 'Supports Images (PNG, JPG, WEBP), PDF, JSON & CSV. 100% private.',
-            drop: 'Drag & drop image, PDF, JSON or CSV here',
+            drop: 'Drag & drop files here or click to select',
             convert: 'Convert Now',
             labelTo: 'Convert To',
             aboutBtn: 'About',
@@ -190,11 +195,16 @@
                     <p><strong>SecureConvert</strong> is built on the principle of absolute privacy. Unlike traditional converters, we don't have a "backend" server that sees your data.</p>
                     <p><strong>How it works:</strong> Your browser acts as the engine. When you upload a file, JavaScript libraries process the data directly in your RAM. The file is transformed and offered for download without a single byte being sent over the internet.</p>
                     <p><strong>Why it's safe:</strong> Even if your internet connection is cut mid-conversion, the process will finish. Your sensitive documents, photos, and data remain under your total control.</p>
-                `
+                `,
+            filesSelected: 'files selected',
+            converting: 'Converting',
+            of: 'of',
+            complete: 'Complete!',
+            error: 'Error'
         },
         ru: {
             subtitle: 'Поддержка изображений (PNG, JPG, WEBP), PDF, JSON и CSV. 100% приватно.',
-            drop: 'Перетащите изображение, PDF, JSON или CSV файл сюда',
+            drop: 'Перетащите файлы сюда или кликните для выбора',
             convert: 'Конвертировать',
             labelTo: 'Конвертировать в',
             aboutBtn: 'О проекте',
@@ -211,7 +221,12 @@
                     <p><strong>SecureConvert</strong> построен на принципе абсолютной анонимности. В отличие от обычных сервисов, у нас нет сервера, который "видит" ваши данные.</p>
                     <p><strong>Как это работает:</strong> Ваш браузер сам выступает в роли движка. Когда вы выбираете файл, библиотеки JavaScript обрабатывают данные прямо в оперативной памяти вашего устройства. Файл конвертируется локально, без отправки в интернет.</p>
                     <p><strong>Почему это безопасно:</strong> Даже если вы отключите интернет в процессе работы, всё будет работать. Ваши личные документы и данные остаются только под вашим контролем.</p>
-                `
+                `,
+            filesSelected: 'файлов выбрано',
+            converting: 'Конвертация',
+            of: 'из',
+            complete: 'Готово!',
+            error: 'Ошибка'
         }
     };
 
@@ -240,6 +255,13 @@
         document.getElementById('langEn').className = `px-3 h-8 text-[10px] font-black rounded-lg transition-all ${currentLang === 'en' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand' : 'text-slate-400 hover:text-slate-600'}`;
         document.getElementById('langRu').className = `px-3 h-8 text-[10px] font-black rounded-lg transition-all ${currentLang === 'ru' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand' : 'text-slate-400 hover:text-slate-600'}`;
 
+        // Обновляем текст счетчика файлов если он есть
+        const fileCountDisplay = document.getElementById('fileCountDisplay');
+        if (fileCountDisplay && !fileCountDisplay.classList.contains('hidden')) {
+            const count = selectedFiles.length;
+            fileCountDisplay.textContent = `${count} ${t.filesSelected}`;
+        }
+
         lucide.createIcons();
     }
 
@@ -266,25 +288,26 @@
     // --- File Handling & Conversion Logic (UI untouched) ---
     const dropzone = document.getElementById('dropzone');
     const fileInput = document.getElementById('fileInput');
-    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const filesList = document.getElementById('filesList');
+    const fileCountDisplay = document.getElementById('fileCountDisplay');
     const convertBtn = document.getElementById('convertBtn');
     const targetFormat = document.getElementById('targetFormat');
     const progressInner = document.getElementById('progressInner');
+    const conversionStatus = document.getElementById('conversionStatus');
 
-    let selectedFile = null;
+    let selectedFiles = [];
 
     // Открытие проводника при клике на dropzone
     dropzone.addEventListener('click', () => {
         fileInput.click();
     });
 
-    // Обработка выбора файла через input
+    // Обработка выбора файлов через input
     fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            setFile(file);
+        const files = Array.from(e.target.files);
+        if (files.length > 0) {
+            addFiles(files);
         }
-        // Сбрасываем value, чтобы при повторном выборе того же файла событие срабатывало
         fileInput.value = '';
     });
 
@@ -302,101 +325,226 @@
     dropzone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropzone.classList.remove('border-brand', 'bg-brand/5');
-        const file = e.dataTransfer.files[0];
-        if (file) {
-            setFile(file);
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+            addFiles(files);
         }
     });
 
-    function setFile(file) {
-        selectedFile = file;
-        fileNameDisplay.textContent = file.name;
-        fileNameDisplay.classList.remove('hidden');
+    function addFiles(files) {
+        selectedFiles.push(...files);
+        updateFilesList();
+    }
+
+    function updateFilesList() {
+        const t = i18n[currentLang];
+
+        if (selectedFiles.length === 0) {
+            filesList.classList.add('hidden');
+            fileCountDisplay.classList.add('hidden');
+            filesList.innerHTML = '';
+            return;
+        }
+
+        filesList.classList.remove('hidden');
+        fileCountDisplay.classList.remove('hidden');
+
+        // Обновляем счетчик
+        fileCountDisplay.textContent = `${selectedFiles.length} ${t.filesSelected}`;
+
+        // Создаем список файлов
+        filesList.innerHTML = '';
+        selectedFiles.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'flex items-center justify-between text-xs bg-slate-100 dark:bg-slate-800 rounded-lg px-3 py-1.5';
+
+            const fileInfo = document.createElement('div');
+            fileInfo.className = 'flex items-center gap-2 flex-1 min-w-0';
+
+            const fileIcon = document.createElement('i');
+            fileIcon.setAttribute('data-lucide', 'file');
+            fileIcon.className = 'w-3 h-3 text-slate-500 flex-shrink-0';
+
+            const fileName = document.createElement('span');
+            fileName.className = 'truncate text-slate-700 dark:text-slate-300';
+            fileName.textContent = file.name;
+
+            const fileSize = document.createElement('span');
+            fileSize.className = 'text-slate-400 flex-shrink-0';
+            fileSize.textContent = formatFileSize(file.size);
+
+            fileInfo.appendChild(fileIcon);
+            fileInfo.appendChild(fileName);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'ml-2 p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors flex-shrink-0';
+            removeBtn.innerHTML = '<i data-lucide="x" class="w-3 h-3"></i>';
+            removeBtn.onclick = (e) => {
+                e.stopPropagation();
+                selectedFiles.splice(index, 1);
+                updateFilesList();
+            };
+
+            fileItem.appendChild(fileInfo);
+            fileItem.appendChild(fileSize);
+            fileItem.appendChild(removeBtn);
+            filesList.appendChild(fileItem);
+        });
+
+        lucide.createIcons();
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function clearFiles() {
+        selectedFiles = [];
+        updateFilesList();
     }
 
     // --- Конвертация ---
     convertBtn.addEventListener('click', async () => {
-        if (!selectedFile) {
-            alert(currentLang === 'ru' ? 'Пожалуйста, выберите файл' : 'Please select a file');
+        if (selectedFiles.length === 0) {
+            alert(currentLang === 'ru' ? 'Пожалуйста, выберите файлы' : 'Please select files');
             return;
         }
 
+        const t = i18n[currentLang];
         const targetMime = targetFormat.value;
-        progressInner.style.width = '10%';
+        const totalFiles = selectedFiles.length;
+        let processedFiles = 0;
+        let hasErrors = false;
 
-        try {
-            let resultBlob;
-            const fileType = selectedFile.type;
-            const fileName = selectedFile.name;
+        convertBtn.disabled = true;
+        conversionStatus.classList.remove('hidden');
+        progressInner.style.width = '0%';
 
-            // Вспомогательные функции для конвертации (используем те же подходы, что в предоставленных модулях)
-            if (fileType.startsWith('image/') || fileName.match(/\.(png|jpe?g|webp|bmp|gif)$/i)) {
-                // Изображения: конвертация через canvas
-                resultBlob = await convertImage(selectedFile, targetMime);
-            } else if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
-                // PDF -> изображение или остаётся PDF (если цель PDF — просто вернуть оригинал)
-                if (targetMime === 'application/pdf') {
-                    resultBlob = selectedFile;
-                } else if (targetMime.startsWith('image/')) {
-                    resultBlob = await pdfToImage(selectedFile, targetMime);
+        // Если файлов больше одного, создаем ZIP архив
+        const createZip = totalFiles > 1;
+        let zip = createZip ? new JSZip() : null;
+
+        for (let i = 0; i < selectedFiles.length; i++) {
+            const file = selectedFiles[i];
+            const progress = ((i) / totalFiles) * 100;
+            progressInner.style.width = progress + '%';
+            conversionStatus.textContent = `${t.converting} ${i + 1} ${t.of} ${totalFiles}: ${file.name}`;
+
+            try {
+                const resultBlob = await convertFile(file, targetMime);
+
+                if (createZip) {
+                    const fileName = generateFileName(file.name, targetMime);
+                    zip.file(fileName, resultBlob);
                 } else {
-                    throw new Error('Unsupported conversion from PDF to ' + targetMime);
+                    // Если один файл, сразу скачиваем
+                    const fileName = generateFileName(file.name, targetMime);
+                    downloadBlob(resultBlob, fileName);
                 }
-            } else if (fileType === 'application/json' || fileName.endsWith('.json')) {
-                if (targetMime === 'text/csv') {
-                    resultBlob = await jsonToCsvBlob(selectedFile);
-                } else {
-                    throw new Error('Unsupported conversion from JSON');
-                }
-            } else if (fileType === 'text/csv' || fileName.endsWith('.csv')) {
-                if (targetMime === 'application/json') {
-                    resultBlob = await csvToJsonBlob(selectedFile);
-                } else {
-                    throw new Error('Unsupported conversion from CSV');
-                }
-            } else {
-                // Пробуем как изображение
-                if (targetMime.startsWith('image/')) {
-                    resultBlob = await convertImage(selectedFile, targetMime);
-                } else {
-                    throw new Error('Unsupported file type');
-                }
+
+                processedFiles++;
+            } catch (error) {
+                console.error(`Error converting ${file.name}:`, error);
+                hasErrors = true;
+                // Продолжаем с другими файлами
             }
-
-            progressInner.style.width = '100%';
-
-            // Генерация имени файла
-            const baseName = fileName.replace(/\.[^/.]+$/, '');
-            let extension = '';
-            if (targetMime === 'image/png') extension = '.png';
-            else if (targetMime === 'image/jpeg') extension = '.jpg';
-            else if (targetMime === 'image/webp') extension = '.webp';
-            else if (targetMime === 'application/pdf') extension = '.pdf';
-            else if (targetMime === 'application/json') extension = '.json';
-            else if (targetMime === 'text/csv') extension = '.csv';
-            else extension = '';
-
-            const newFileName = baseName + extension;
-
-            // Скачивание
-            const url = URL.createObjectURL(resultBlob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = newFileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            progressInner.style.width = '0%';
-        } catch (error) {
-            console.error(error);
-            alert('Conversion error: ' + (error.message || 'Unknown error'));
-            progressInner.style.width = '0%';
         }
+
+        progressInner.style.width = '100%';
+
+        if (createZip && processedFiles > 0) {
+            conversionStatus.textContent = `${t.converting} ZIP...`;
+            try {
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const zipName = `converted_files_${new Date().getTime()}.zip`;
+                downloadBlob(zipBlob, zipName);
+                conversionStatus.textContent = t.complete;
+            } catch (error) {
+                console.error('Error creating ZIP:', error);
+                hasErrors = true;
+            }
+        } else if (processedFiles === 0) {
+            conversionStatus.textContent = t.error;
+        } else {
+            conversionStatus.textContent = t.complete;
+        }
+
+        // Сбрасываем состояние
+        setTimeout(() => {
+            convertBtn.disabled = false;
+            progressInner.style.width = '0%';
+            conversionStatus.classList.add('hidden');
+            if (!hasErrors) {
+                clearFiles();
+            }
+        }, 2000);
     });
 
-    // --- Вспомогательные функции конвертации (на основе предоставленных файлов) ---
+    async function convertFile(file, targetMime) {
+        const fileType = file.type;
+        const fileName = file.name;
+
+        if (fileType.startsWith('image/') || fileName.match(/\.(png|jpe?g|webp|bmp|gif)$/i)) {
+            return await convertImage(file, targetMime);
+        } else if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
+            if (targetMime === 'application/pdf') {
+                return file;
+            } else if (targetMime.startsWith('image/')) {
+                return await pdfToImage(file, targetMime);
+            } else {
+                throw new Error('Unsupported conversion from PDF to ' + targetMime);
+            }
+        } else if (fileType === 'application/json' || fileName.endsWith('.json')) {
+            if (targetMime === 'text/csv') {
+                return await jsonToCsvBlob(file);
+            } else {
+                throw new Error('Unsupported conversion from JSON');
+            }
+        } else if (fileType === 'text/csv' || fileName.endsWith('.csv')) {
+            if (targetMime === 'application/json') {
+                return await csvToJsonBlob(file);
+            } else {
+                throw new Error('Unsupported conversion from CSV');
+            }
+        } else {
+            // Пробуем как изображение
+            if (targetMime.startsWith('image/')) {
+                return await convertImage(file, targetMime);
+            } else {
+                throw new Error('Unsupported file type');
+            }
+        }
+    }
+
+    function generateFileName(originalName, targetMime) {
+        const baseName = originalName.replace(/\.[^/.]+$/, '');
+        let extension = '';
+        if (targetMime === 'image/png') extension = '.png';
+        else if (targetMime === 'image/jpeg') extension = '.jpg';
+        else if (targetMime === 'image/webp') extension = '.webp';
+        else if (targetMime === 'application/pdf') extension = '.pdf';
+        else if (targetMime === 'application/json') extension = '.json';
+        else if (targetMime === 'text/csv') extension = '.csv';
+        else extension = '';
+        return baseName + extension;
+    }
+
+    function downloadBlob(blob, fileName) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    // --- Вспомогательные функции конвертации ---
     async function convertImage(blob, targetMime) {
         const img = await loadImageFromBlob(blob);
         const canvas = document.createElement('canvas');
